@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>影片與貼文下載器</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;font-family:"Noto Sans TC",sans-serif;background:#f4f5f9;color:#222}
+ header{text-align:center;padding:40px 16px 20px}
+ header h1{margin:0 0 6px;font-size:30px}
+ header p{margin:0;color:#666}
+ .tabs{display:flex;justify-content:center;gap:10px;margin:10px 0}
+ .tab{padding:10px 26px;border-radius:30px;border:0;background:#e3e5ee;font-size:16px;cursor:pointer}
+ .tab.active.ig{background:linear-gradient(45deg,#f9a03f,#e1306c,#8a3ab9);color:#fff}
+ .tab.active.yt{background:#f00;color:#fff}
+ .box{max-width:720px;margin:16px auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 20px #0001}
+ .row{display:flex;gap:8px}
+ input[type=text]{flex:1;min-width:0;padding:14px;border:2px solid #ddd;border-radius:10px;font-size:16px}
+ .go{padding:0 26px;border:0;border-radius:10px;color:#fff;font-size:16px;cursor:pointer;background:#e1306c}
+ .yt-mode .go{background:#f00}
+ .msg{margin-top:12px;color:#c00;min-height:20px;word-break:break-all}
+ .item{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid #eee;border-radius:12px;margin-top:10px}
+ .item img{width:90px;height:90px;object-fit:cover;border-radius:8px;background:#ddd}
+ .info{flex:1;font-size:14px}
+ .btn{padding:10px 16px;border-radius:8px;background:#22a45d;color:#fff;text-decoration:none;font-size:14px}
+ .hbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+ .tag{font-size:12px;background:gold;color:#000;border-radius:4px;padding:1px 5px;margin-left:4px}
+ .opt{margin-top:10px;font-size:14px;display:none}
+ .yt-mode .opt{display:block}
+ select{padding:6px;border-radius:6px}
+ .spin{display:none;text-align:center;margin-top:12px;color:#666}
+ .hint{font-size:12px;color:#888;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+ <h1>影片與貼文下載器</h1>
+ <p>貼上連結，下載原始畫質</p>
+</header>
+
+<div class="tabs">
+ <button class="tab ig active" id="tab-ig" onclick="setMode('ig')">Instagram</button>
+ <button class="tab yt" id="tab-yt" onclick="setMode('yt')">YouTube</button>
+</div>
+
+<div class="box" id="box">
+ <div class="row">
+  <input type="text" id="url" placeholder="貼上 Instagram 貼文或 Reels 連結">
+  <button class="go" onclick="fetchInfo()">搜尋</button>
+ </div>
+ <div class="opt">
+  格式：
+  <select id="cont">
+   <option value="mp4">MP4（相容性高）</option>
+   <option value="mkv">MKV（最高畫質，4K 建議）</option>
+  </select>
+ </div>
+ <div class="spin" id="spin">讀取中，請稍等...</div>
+ <div class="msg" id="msg"></div>
+ <div id="result"></div>
+ <div class="hint">點下載後，伺服器需要先處理影片，可能要等幾十秒才會開始下載。</div>
+</div>
+
+<script>
+let mode='ig';
+function setMode(m){
+  mode=m;
+  document.getElementById('tab-ig').className='tab ig'+(m=='ig'?' active':'');
+  document.getElementById('tab-yt').className='tab yt'+(m=='yt'?' active':'');
+  document.getElementById('box').className='box'+(m=='yt'?' yt-mode':'');
+  document.getElementById('url').placeholder=m=='ig'?'貼上 Instagram 貼文或 Reels 連結':'貼上 YouTube 影片連結';
+  document.getElementById('result').innerHTML='';
+  document.getElementById('msg').textContent='';
+}
+function th(u){return u?'/api/thumb?u='+encodeURIComponent(u):''}
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+async function fetchInfo(){
+  const url=document.getElementById('url').value.trim();
+  const msg=document.getElementById('msg'),res=document.getElementById('result'),spin=document.getElementById('spin');
+  msg.textContent='';res.innerHTML='';
+  if(!url){msg.textContent='請先貼上連結';return;}
+  spin.style.display='block';
+  try{
+    const r=await fetch('/api/info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,kind:mode})});
+    const d=await r.json();
+    spin.style.display='none';
+    if(!r.ok){msg.textContent='失敗：'+d.error;return;}
+    const eu=encodeURIComponent(url);
+    if(mode=='yt'){
+      const cont=document.getElementById('cont').value;
+      const h=d.heights.map(x=>`<a class="btn" href="/api/dl?kind=yt&h=${x}&cont=${cont}&url=${eu}">${x}p${x>=1080?'<span class="tag">HD</span>':''}</a>`).join('');
+      res.innerHTML=`<div class="item"><img src="${th(d.thumb)}"><div class="info"><b>${esc(d.title)}</b><div class="hbtns">${h}</div></div></div>`;
+    }else{
+      res.innerHTML=d.items.map(i=>`<div class="item"><img src="${th(i.thumb)}"><div class="info">${i.video?'影片':'圖片'} #${i.index}</div><a class="btn" href="/api/dl?kind=ig&idx=${i.index}&url=${eu}">下載</a></div>`).join('');
+    }
+  }catch(e){spin.style.display='none';msg.textContent='錯誤：'+e;}
+}
+document.getElementById('url').addEventListener('keydown',e=>{if(e.key=='Enter')fetchInfo()});
+</script>
+</body>
+</html>
